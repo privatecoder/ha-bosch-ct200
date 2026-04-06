@@ -140,7 +140,7 @@ class RestHeatingCircuitSelect(CoordinatorEntity, BoschEntity, SelectEntity):
     @property
     def device_name(self):
         """Return device name."""
-        return f"{self._name_prefix}{self._hc.name}"
+        return self._hc.name
 
     @property
     def _domain_identifier(self):
@@ -244,7 +244,7 @@ class RestSystemSelect(CoordinatorEntity, BoschEntity, SelectEntity):
     @property
     def device_name(self):
         """Return device name."""
-        return "Bosch CT200"
+        return "Thermostat"
 
     @property
     def _domain_identifier(self):

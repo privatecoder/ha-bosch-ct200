@@ -53,7 +53,7 @@ class RestDhwCircuit:
         self._thermal_disinfect_last_result: str | None = None
 
         self._update_initialized: bool = False
-        self._name = f"DHW {dhw_id}"
+        self._name = f"Domestic Hot Water ({dhw_id})"
 
         _LOGGER.debug("Created RestDhwCircuit for %s on device %s", dhw_id, device_id)
 

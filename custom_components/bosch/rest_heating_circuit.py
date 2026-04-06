@@ -60,7 +60,7 @@ class RestHeatingCircuit:
         self._boost_remaining_time: float | None = None
 
         self._update_initialized: bool = False
-        self._name = f"Heating Circuit {hc_id}"
+        self._name = f"Heating Circuit ({hc_id})"
 
         _LOGGER.debug("Created RestHeatingCircuit for %s on device %s", hc_id, device_id)
 

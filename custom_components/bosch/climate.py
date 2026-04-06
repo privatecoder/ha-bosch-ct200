@@ -83,7 +83,7 @@ class RestBoschThermostat(CoordinatorEntity, ClimateEntity):
             identifiers={(DOMAIN, self._bosch_object.id, self._uuid)},
             manufacturer=self._gateway.device_model,
             model=self._gateway.device_type,
-            name=f"{self._name_prefix}{self._bosch_object.name}",
+            name=self._bosch_object.device_name,
             sw_version=self._gateway.firmware,
             hw_version=self._uuid,
             via_device=(DOMAIN, self._uuid),

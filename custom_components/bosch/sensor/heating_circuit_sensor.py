@@ -120,7 +120,7 @@ class RestHeatingCircuitSensor(CoordinatorEntity, BoschEntity, SensorEntity):
     @property
     def device_name(self):
         """Return name displayed in device_info."""
-        return f"{self._name_prefix}{self._hc.name}"
+        return self._hc.name
 
     @property
     def _domain_identifier(self):

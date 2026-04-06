@@ -100,7 +100,7 @@ class RestSystemSensor(CoordinatorEntity, BoschEntity, SensorEntity):
     @property
     def device_name(self):
         """Return device name."""
-        return "Bosch CT200"
+        return "Thermostat"
 
     @property
     def _domain_identifier(self):

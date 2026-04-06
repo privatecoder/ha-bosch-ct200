@@ -83,6 +83,11 @@ class RestZone:
         return self._name or f"Zone {self.zone_id}"
 
     @property
+    def device_name(self) -> str:
+        """Return descriptive zone device name."""
+        return f"Heating Zone: {self.name}"
+
+    @property
     def state(self) -> bool:
         """Return zone state (on/off)."""
         # Zone is "on" if it has valid data

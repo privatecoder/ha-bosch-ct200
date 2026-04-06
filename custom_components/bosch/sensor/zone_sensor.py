@@ -108,7 +108,7 @@ class RestZoneSensor(CoordinatorEntity, BoschEntity, SensorEntity):
     @property
     def device_name(self):
         """Return name displayed in device_info."""
-        return f"{self._name_prefix}{self._zone.name}"
+        return self._zone.device_name
 
     @property
     def _domain_identifier(self):
