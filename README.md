@@ -29,7 +29,7 @@ Install as a custom component in Home Assistant, for example via HACS or by copy
 1. Add the Bosch integration in Home Assistant.
 2. Follow the manual browser authorization flow.
 3. Paste the redirect URL or extracted authorization code into the config flow.
-4. The integration will exchange the code, discover your CT200 gateway, and create the config entry.
+4. The integration will exchange the code and discover your CT200 gateway(s). If your account has multiple CT200 devices, you'll be asked to select one.
 
 ## Debugging
 

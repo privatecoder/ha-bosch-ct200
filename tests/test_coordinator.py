@@ -383,6 +383,161 @@ async def test_oauth_browser_step_maps_auth_exchange_failures_by_error_cause(
         assert result["errors"] == {"base": expected_error}
 
 
+@pytest.mark.asyncio
+async def test_oauth_browser_step_prefers_rrc2_gateway_when_account_has_multiple_devices():
+    """Manual browser flow must pick the CT200 gateway instead of the first unrelated device."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        handler.hass = object()
+
+        gateway_client = MagicMock()
+        gateway_client.get_gateways = AsyncMock(
+            return_value=[
+                {"deviceId": "101375911", "deviceType": "wddw2"},
+                {"deviceId": "101426422", "deviceType": "rrc2"},
+            ]
+        )
+        ct200_client = MagicMock()
+        ct200_client.get_device_info = AsyncMock(
+            return_value={"uuid": "uuid-ct200", "firmware": "1.0", "product_id": "ct200"}
+        )
+
+        module._pointt_rest_client_module.PointTRestClient.side_effect = [
+            gateway_client,
+            ct200_client,
+        ]
+
+        with patch.object(
+            module._pointt_rest_client_module,
+            "exchange_code_for_tokens",
+            AsyncMock(return_value=("access-token", "refresh-token")),
+        ):
+            result = await handler.async_step_oauth_browser({"code": "raw-auth-code"})
+
+        assert result["type"] == "create_entry"
+        assert result["title"] == "Bosch CT200 (101426422)"
+        assert result["data"]["device_id"] == "101426422"
+        assert result["data"]["uuid"] == "uuid-ct200"
+
+
+@pytest.mark.asyncio
+async def test_oauth_browser_step_skips_already_configured_ct200_and_auto_selects_remaining_one():
+    """The flow should skip already configured CT200s and auto-select the only remaining one."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        handler.hass = object()
+        handler._current_entries = [SimpleNamespace(data={"device_id": "101375911"})]
+
+        gateway_client = MagicMock()
+        gateway_client.get_gateways = AsyncMock(
+            return_value=[
+                {"deviceId": "101375911", "deviceType": "rrc2"},
+                {"deviceId": "101426422", "deviceType": "rrc2"},
+            ]
+        )
+        ct200_client = MagicMock()
+        ct200_client.get_device_info = AsyncMock(
+            return_value={"uuid": "uuid-ct200", "firmware": "1.0", "product_id": "ct200"}
+        )
+
+        module._pointt_rest_client_module.PointTRestClient.side_effect = [
+            gateway_client,
+            ct200_client,
+        ]
+
+        with patch.object(
+            module._pointt_rest_client_module,
+            "exchange_code_for_tokens",
+            AsyncMock(return_value=("access-token", "refresh-token")),
+        ):
+            result = await handler.async_step_oauth_browser({"code": "raw-auth-code"})
+
+        assert result["type"] == "create_entry"
+        assert result["title"] == "Bosch CT200 (101426422)"
+        assert result["data"]["device_id"] == "101426422"
+
+
+@pytest.mark.asyncio
+async def test_oauth_browser_step_shows_gateway_selection_when_multiple_unconfigured_ct200s_exist():
+    """The flow should show a chooser when multiple unconfigured CT200s are available."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        handler.hass = object()
+
+        gateway_client = MagicMock()
+        gateway_client.get_gateways = AsyncMock(
+            return_value=[
+                {"deviceId": "101375911", "deviceType": "rrc2"},
+                {"deviceId": "101426422", "deviceType": "rrc2"},
+            ]
+        )
+
+        module._pointt_rest_client_module.PointTRestClient.return_value = gateway_client
+
+        with patch.object(
+            module._pointt_rest_client_module,
+            "exchange_code_for_tokens",
+            AsyncMock(return_value=("access-token", "refresh-token")),
+        ):
+            result = await handler.async_step_oauth_browser({"code": "raw-auth-code"})
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "select_gateway"
+        assert handler._pending_access_token == "access-token"
+        assert handler._pending_refresh_token == "refresh-token"
+        assert [gateway["deviceId"] for gateway in handler._pending_gateways] == [
+            "101375911",
+            "101426422",
+        ]
+
+
+@pytest.mark.asyncio
+async def test_select_gateway_step_creates_entry_for_selected_ct200():
+    """The gateway chooser should create an entry for the selected CT200."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        handler.hass = object()
+        handler._pending_access_token = "access-token"
+        handler._pending_refresh_token = "refresh-token"
+        handler._pending_gateways = [
+            {"deviceId": "101375911", "deviceType": "rrc2"},
+            {"deviceId": "101426422", "deviceType": "rrc2"},
+        ]
+
+        ct200_client = MagicMock()
+        ct200_client.get_device_info = AsyncMock(
+            return_value={"uuid": "uuid-ct200", "firmware": "1.0", "product_id": "ct200"}
+        )
+        module._pointt_rest_client_module.PointTRestClient.return_value = ct200_client
+
+        result = await handler.async_step_select_gateway({"device_id": "101426422"})
+
+        assert result["type"] == "create_entry"
+        assert result["title"] == "Bosch CT200 (101426422)"
+        assert result["data"]["device_id"] == "101426422"
+        assert result["data"]["uuid"] == "uuid-ct200"
+
+
+@pytest.mark.asyncio
+async def test_select_gateway_step_rejects_unknown_device_id():
+    """Tampered gateway selections must re-show the chooser with an error."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        handler.hass = object()
+        handler._pending_access_token = "access-token"
+        handler._pending_refresh_token = "refresh-token"
+        handler._pending_gateways = [
+            {"deviceId": "101375911", "deviceType": "rrc2"},
+            {"deviceId": "101426422", "deviceType": "rrc2"},
+        ]
+
+        result = await handler.async_step_select_gateway({"device_id": "999999999"})
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "select_gateway"
+        assert result["errors"] == {"base": "invalid_device"}
+
+
 def test_const_keeps_only_current_config_flow_constants():
     """Verify const.py only keeps constants used by the current integration."""
     const_path = Path(__file__).parent.parent / "custom_components" / "bosch" / "const.py"
@@ -608,6 +763,9 @@ def _load_bosch_config_flow_runtime_module():
         def _abort_if_unique_id_configured(self):
             return None
 
+        def _async_current_entries(self):
+            return getattr(self, "_current_entries", [])
+
     fake_handlers = SimpleNamespace(register=lambda domain: (lambda cls: cls))
     config_entries_module = _module_with_attrs(
         "homeassistant.config_entries",
@@ -667,6 +825,7 @@ def _load_bosch_config_flow_runtime_module():
         ),
         "voluptuous": _module_with_attrs(
             "voluptuous",
+            In=lambda value: value,
             Optional=lambda key, default=None: key,
             Required=lambda key, default=None: key,
             Schema=lambda value: value,

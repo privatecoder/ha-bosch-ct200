@@ -26,6 +26,9 @@ class BoschFlowHandler(config_entries.ConfigFlow):
         """Initialize the OAuth2-only config flow."""
         self._auth_code: str | None = None
         self._code_verifier: str | None = None
+        self._pending_access_token: str | None = None
+        self._pending_refresh_token: str | None = None
+        self._pending_gateways: list[dict] = []
 
     def _extract_code_from_input(self, user_input: str) -> str:
         """Extract the authorization code from a pasted redirect URL or raw code."""
@@ -59,6 +62,78 @@ class BoschFlowHandler(config_entries.ConfigFlow):
             return "auth_failed"
 
         return "invalid_code"
+
+    @staticmethod
+    def _select_ct200_gateway(gateways: list[dict]) -> dict | None:
+        """Select the first CT200/EasyControl gateway from a gateway list."""
+        for gateway in gateways:
+            if gateway.get("deviceType") == "rrc2":
+                return gateway
+        return None
+
+    @staticmethod
+    def _filter_ct200_gateways(gateways: list[dict]) -> list[dict]:
+        """Return only CT200/EasyControl gateways."""
+        return [gateway for gateway in gateways if gateway.get("deviceType") == "rrc2"]
+
+    def _filter_unconfigured_gateways(self, gateways: list[dict]) -> list[dict]:
+        """Return CT200 gateways that are not already configured."""
+        configured_device_ids = {
+            entry.data.get(DEVICE_ID)
+            for entry in self._async_current_entries()
+            if getattr(entry, "data", None)
+        }
+        return [
+            gateway
+            for gateway in gateways
+            if gateway.get("deviceId") not in configured_device_ids
+        ]
+
+    def _show_gateway_selection_form(self, errors: dict[str, str] | None = None):
+        """Render the CT200 gateway selection step."""
+        options = {
+            gateway["deviceId"]: f'Bosch CT200 ({gateway["deviceId"]})'
+            for gateway in self._pending_gateways
+        }
+        return self.async_show_form(
+            step_id="select_gateway",
+            data_schema=vol.Schema({vol.Required("device_id"): vol.In(options)}),
+            errors=errors or {},
+        )
+
+    async def _async_create_entry_for_gateway(
+        self,
+        *,
+        session,
+        device_id: str,
+        access_token: str,
+        refresh_token: str,
+    ):
+        """Fetch device info and create a config entry for a selected gateway."""
+        from .pointt_rest_client import PointTRestClient
+
+        client = PointTRestClient(
+            session=session,
+            device_id=device_id,
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
+        device_info = await client.get_device_info()
+        uuid = device_info.get("uuid", device_id)
+
+        await self.async_set_unique_id(uuid)
+        self._abort_if_unique_id_configured()
+
+        _LOGGER.debug("Adding Bosch OAuth2 entry.")
+        return self.async_create_entry(
+            title=f"Bosch CT200 ({device_id})",
+            data={
+                DEVICE_ID: device_id,
+                UUID: uuid,
+                ACCESS_TOKEN: access_token,
+                REFRESH_TOKEN: refresh_token,
+            },
+        )
 
     def _build_code_challenge(self) -> str:
         """Build the PKCE challenge for the current verifier."""
@@ -124,37 +199,25 @@ class BoschFlowHandler(config_entries.ConfigFlow):
                 access_token=access_token,
                 refresh_token=refresh_token,
             )
-            gateways = await temp_client.get_gateways()
+            gateways = self._filter_ct200_gateways(await temp_client.get_gateways())
+            gateways = self._filter_unconfigured_gateways(gateways)
 
             if not gateways:
-                _LOGGER.error("No gateways found for this account")
+                _LOGGER.error("No CT200 gateways available for this account")
                 return self._show_oauth_browser_form(errors={"base": "no_devices"})
 
-            gateway = gateways[0]
-            device_id = gateway["deviceId"]
+            if len(gateways) == 1:
+                return await self._async_create_entry_for_gateway(
+                    session=session,
+                    device_id=gateways[0]["deviceId"],
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                )
 
-            client = PointTRestClient(
-                session=session,
-                device_id=device_id,
-                access_token=access_token,
-                refresh_token=refresh_token,
-            )
-            device_info = await client.get_device_info()
-            uuid = device_info.get("uuid", device_id)
-
-            await self.async_set_unique_id(uuid)
-            self._abort_if_unique_id_configured()
-
-            _LOGGER.debug("Adding Bosch OAuth2 entry.")
-            return self.async_create_entry(
-                title=f"Bosch CT200 ({device_id})",
-                data={
-                    DEVICE_ID: device_id,
-                    UUID: uuid,
-                    ACCESS_TOKEN: access_token,
-                    REFRESH_TOKEN: refresh_token,
-                },
-            )
+            self._pending_access_token = access_token
+            self._pending_refresh_token = refresh_token
+            self._pending_gateways = gateways
+            return self._show_gateway_selection_form()
         except ConfigEntryAuthFailed as err:
             _LOGGER.error("OAuth token exchange failed: %s", err)
             return self._show_oauth_browser_form(
@@ -163,6 +226,27 @@ class BoschFlowHandler(config_entries.ConfigFlow):
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Error during OAuth setup: %s", err)
             return self._show_oauth_browser_form(errors={"base": "auth_failed"})
+
+    async def async_step_select_gateway(self, user_input=None):
+        """Select one CT200 gateway when multiple are available."""
+        if user_input is None:
+            return self._show_gateway_selection_form()
+
+        device_id = user_input.get("device_id")
+        matching_gateway = next(
+            (gateway for gateway in self._pending_gateways if gateway.get("deviceId") == device_id),
+            None,
+        )
+        if matching_gateway is None:
+            return self._show_gateway_selection_form(errors={"base": "invalid_device"})
+
+        session = async_get_clientsession(self.hass)
+        return await self._async_create_entry_for_gateway(
+            session=session,
+            device_id=device_id,
+            access_token=self._pending_access_token,
+            refresh_token=self._pending_refresh_token,
+        )
 
 
 config_entries.HANDLERS.register(DOMAIN)(BoschFlowHandler)
