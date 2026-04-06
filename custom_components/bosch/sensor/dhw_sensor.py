@@ -92,8 +92,8 @@ class RestDhwSensor(CoordinatorEntity, BoschEntity, SensorEntity):
         # Generate unique ID
         self._attr_unique_id = f"{uuid}{dhw.id}_{sensor_type}"
 
-        super().__init__(
-            hass=hass, uuid=uuid, bosch_object=dhw, gateway=gateway
+        BoschEntity.__init__(
+            self, hass=hass, uuid=uuid, bosch_object=dhw, gateway=gateway
         )
 
         # Set name

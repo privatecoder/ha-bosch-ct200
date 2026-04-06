@@ -107,9 +107,10 @@ class RestHeatingCircuitSensor(CoordinatorEntity, BoschEntity, SensorEntity):
         # Generate unique ID
         self._attr_unique_id = f"{uuid}{hc.id}_{sensor_type}"
 
-        # Use the wrapped circuit object for device metadata and state access.
-        super().__init__(
-            hass=hass, uuid=uuid, bosch_object=hc, gateway=gateway
+        # CoordinatorEntity is first in the MRO, so BoschEntity must be
+        # initialized explicitly with the metadata context.
+        BoschEntity.__init__(
+            self, hass=hass, uuid=uuid, bosch_object=hc, gateway=gateway
         )
 
         # Set name

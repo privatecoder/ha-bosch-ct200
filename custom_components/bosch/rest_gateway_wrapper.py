@@ -20,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 class RestGatewayWrapper:
     """Gateway wrapper for modeled CT200 PointT resources."""
 
-    SYSTEM_ENDPOINTS = [
+    SYSTEM_CONTROL_ENDPOINTS = [
         "/devices/device1/thermostat/childLock/enabled",
         "/system/awayMode/enabled",
         "/system/autoAway/enabled",
@@ -32,43 +32,52 @@ class RestGatewayWrapper:
         "/system/openWindowDetection/temperature",
         "/gateway/pirSensitivity",
         "/gateway/ui/splashScreen",
+    ]
+    SYSTEM_SENSOR_ENDPOINTS = [
         "/system/sensors/humidity/indoor_h1",
         "/system/sensors/temperatures/outdoor_t1",
         "/system/sensors/temperatures/indoorAirDigital",
         "/system/sensors/temperatures/indoorChip",
         "/system/sensors/temperatures/indoorPCB",
     ]
-    ZONE_ENDPOINTS = [
+    SYSTEM_ENDPOINTS = [*SYSTEM_CONTROL_ENDPOINTS, *SYSTEM_SENSOR_ENDPOINTS]
+    ZONE_CORE_ENDPOINTS = [
         "/zones/zn1/temperatureActual",
         "/zones/zn1/temperatureHeatingSetpoint",
         "/zones/zn1/userMode",
         "/zones/zn1/status",
         "/zones/zn1/name",
         "/zones/zn1/actualValvePosition",
-        "/zones/zn1/nextSetpoint",
         "/zones/zn1/timeToNextSetpoint",
         "/zones/zn1/optimumStartState",
         "/zones/zn1/optimumStartHeatupRate",
         "/zones/zn1/openWindowDetection/enabled",
         "/zones/zn1/openWindowDetection/status",
+    ]
+    ZONE_SUPPLEMENTAL_ENDPOINTS = [
+        "/zones/zn1/nextSetpoint",
         "/zones/zn1/manualTemperatureHeating",
         "/zones/zn1/clockProgram",
         "/zones/zn1/clockOverride/temperatureHeating",
         "/zones/zn1/icon",
         "/zones/zn1/heatingType",
     ]
-    HEATING_CIRCUIT_ENDPOINTS = [
-        "/heatingCircuits/hc1/heatCurveMax",
-        "/heatingCircuits/hc1/heatCurveMin",
-        "/heatingCircuits/hc1/maxSupply",
-        "/heatingCircuits/hc1/minSupply",
+    ZONE_ENDPOINTS = [*ZONE_CORE_ENDPOINTS, *ZONE_SUPPLEMENTAL_ENDPOINTS]
+    HEATING_CIRCUIT_CORE_ENDPOINTS = [
         "/heatingCircuits/hc1/supplyTemperatureSetpoint",
         "/heatingCircuits/hc1/minOutdoorTemp",
         "/heatingCircuits/hc1/nightThreshold",
         "/heatingCircuits/hc1/suWiThreshold",
-        "/heatingCircuits/hc1/roomInfluence",
         "/heatingCircuits/hc1/boostMode",
         "/heatingCircuits/hc1/operatingSeason",
+        "/heatingCircuits/hc1/boostRemainingTime",
+    ]
+    HEATING_CIRCUIT_SUPPLEMENTAL_ENDPOINTS = [
+        "/heatingCircuits/hc1/heatCurveMax",
+        "/heatingCircuits/hc1/heatCurveMin",
+        "/heatingCircuits/hc1/maxSupply",
+        "/heatingCircuits/hc1/minSupply",
+        "/heatingCircuits/hc1/roomInfluence",
         "/heatingCircuits/hc1/nightSwitchMode",
         "/heatingCircuits/hc1/suWiSwitchMode",
         "/heatingCircuits/hc1/type",
@@ -77,28 +86,48 @@ class RestGatewayWrapper:
         "/heatingCircuits/hc1/setpointOptimization",
         "/heatingCircuits/hc1/boostDuration",
         "/heatingCircuits/hc1/boostTemperature",
-        "/heatingCircuits/hc1/boostRemainingTime",
     ]
-    DHW_ENDPOINTS = [
+    HEATING_CIRCUIT_ENDPOINTS = [
+        *HEATING_CIRCUIT_CORE_ENDPOINTS,
+        *HEATING_CIRCUIT_SUPPLEMENTAL_ENDPOINTS,
+    ]
+    DHW_CORE_ENDPOINTS = [
         "/dhwCircuits/dhw1/actualTemp",
         "/dhwCircuits/dhw1/hotWaterSystem",
         "/dhwCircuits/dhw1/state",
-        "/dhwCircuits/dhw1/operationMode",
-        "/dhwCircuits/dhw1/extraDhw",
-        "/dhwCircuits/dhw1/extraDhwDuration",
-        "/dhwCircuits/dhw1/temperatureLevels/high",
         "/dhwCircuits/dhw1/thermalDisinfect/lastResult",
         "/dhwCircuits/dhw1/thermalDisinfect/state",
         "/dhwCircuits/dhw1/thermalDisinfect/time",
         "/dhwCircuits/dhw1/thermalDisinfect/weekDay",
     ]
+    DHW_SUPPLEMENTAL_ENDPOINTS = [
+        "/dhwCircuits/dhw1/operationMode",
+        "/dhwCircuits/dhw1/extraDhw",
+        "/dhwCircuits/dhw1/extraDhwDuration",
+        "/dhwCircuits/dhw1/temperatureLevels/high",
+    ]
+    DHW_ENDPOINTS = [*DHW_CORE_ENDPOINTS, *DHW_SUPPLEMENTAL_ENDPOINTS]
     MODELLED_ENDPOINTS = [
         *ZONE_ENDPOINTS,
         *SYSTEM_ENDPOINTS,
         *HEATING_CIRCUIT_ENDPOINTS,
         *DHW_ENDPOINTS,
     ]
-    BULK_PRIMARY_ENDPOINTS = MODELLED_ENDPOINTS
+    BULK_REQUEST_GROUPS = {
+        "zone_core": ZONE_CORE_ENDPOINTS,
+        "system_sensors": SYSTEM_SENSOR_ENDPOINTS,
+        "heating_circuit_core": HEATING_CIRCUIT_CORE_ENDPOINTS,
+        "dhw_core": DHW_CORE_ENDPOINTS,
+        "system_controls": SYSTEM_CONTROL_ENDPOINTS,
+        "zone_supplemental": ZONE_SUPPLEMENTAL_ENDPOINTS,
+        "heating_circuit_supplemental": HEATING_CIRCUIT_SUPPLEMENTAL_ENDPOINTS,
+        "dhw_supplemental": DHW_SUPPLEMENTAL_ENDPOINTS,
+    }
+    BULK_PRIMARY_ENDPOINTS = [
+        path
+        for paths in BULK_REQUEST_GROUPS.values()
+        for path in paths
+    ]
     BULK_BLACKLIST = {"/zones/zn1/humidity"}
 
     def __init__(self, client: PointTRestClient, entry: ConfigEntry):  # type: ignore[name-defined]
@@ -280,31 +309,54 @@ class RestGatewayWrapper:
         return payloads, failures
 
     async def _update_bulk_cache(self) -> set[str]:
-        """Fetch the primary CT200 payload set via PointT bulk request."""
+        """Fetch the CT200 payload set via PointT bulk requests."""
         failed_paths: set[str] = set()
-        bulk_paths = [
-            path for path in self.BULK_PRIMARY_ENDPOINTS if path not in self._bulk_blacklist
-        ]
-        if not bulk_paths or not hasattr(self.client, "post_bulk_resources"):
+        if not hasattr(self.client, "post_bulk_resources"):
             return failed_paths
 
-        response_data = None
-        for attempt in range(2):
-            try:
-                response_data = await self.client.post_bulk_resources(bulk_paths)
-                break
-            except Exception as err:  # pylint: disable=broad-except
-                if attempt == 1:
-                    _LOGGER.warning("Bulk fetch failed for %s: %s", self.device_id, err)
-                    return set(bulk_paths)
+        seen_paths: set[str] = set()
+        for group_name, group_paths in self.BULK_REQUEST_GROUPS.items():
+            bulk_paths = [
+                path
+                for path in group_paths
+                if path not in self._bulk_blacklist and path not in seen_paths
+            ]
+            if not bulk_paths:
+                continue
 
-        payloads, failures = self._extract_bulk_payloads(response_data)
-        self._resource_cache.update(payloads)
+            response_data = None
+            for attempt in range(2):
+                try:
+                    response_data = await self.client.post_bulk_resources(bulk_paths)
+                    break
+                except Exception as err:  # pylint: disable=broad-except
+                    if attempt == 1:
+                        failed_paths.update(bulk_paths)
+                        _LOGGER.warning(
+                            "Bulk fetch failed for %s group %s (%d endpoints): %s",
+                            self.device_id,
+                            group_name,
+                            len(bulk_paths),
+                            err,
+                        )
+                        _LOGGER.debug(
+                            "Rejected bulk group %s endpoints: %s",
+                            group_name,
+                            bulk_paths,
+                        )
+                        response_data = None
 
-        for path, failure in failures.items():
-            failed_paths.add(path)
-            if isinstance(failure, dict) and failure.get("serverStatus") == 403:
-                self._bulk_blacklist.add(path)
+            if response_data is None:
+                continue
+
+            payloads, failures = self._extract_bulk_payloads(response_data)
+            self._resource_cache.update(payloads)
+            seen_paths.update(payloads)
+
+            for path, failure in failures.items():
+                failed_paths.add(path)
+                if isinstance(failure, dict) and failure.get("serverStatus") == 403:
+                    self._bulk_blacklist.add(path)
 
         return failed_paths
 

@@ -87,9 +87,10 @@ class RestSystemSensor(CoordinatorEntity, BoschEntity, SensorEntity):
         # Generate unique ID
         self._attr_unique_id = f"{uuid}_system_{sensor_type}"
 
-        # Use gateway wrapper as bosch_object
-        super().__init__(
-            hass=hass, uuid=uuid, bosch_object=gateway, gateway=gateway
+        # CoordinatorEntity is first in the MRO, so BoschEntity must be
+        # initialized explicitly with the metadata context.
+        BoschEntity.__init__(
+            self, hass=hass, uuid=uuid, bosch_object=gateway, gateway=gateway
         )
 
         # Set name

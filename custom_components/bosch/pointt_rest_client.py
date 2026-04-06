@@ -260,7 +260,23 @@ class PointTRestClient:
             async with self._session.post(
                 BULK_URL, headers=headers, json=payload, timeout=15
             ) as response:
-                response.raise_for_status()
+                if response.status == 401:
+                    raise aiohttp.ClientResponseError(
+                        response.request_info,
+                        response.history,
+                        status=response.status,
+                        message="Unauthorized",
+                        headers=response.headers,
+                    )
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise aiohttp.ClientResponseError(
+                        response.request_info,
+                        response.history,
+                        status=response.status,
+                        message=error_text,
+                        headers=response.headers,
+                    )
                 data = await response.json()
                 return data if isinstance(data, list) else []
         except aiohttp.ClientResponseError as err:
@@ -271,10 +287,22 @@ class PointTRestClient:
                 async with self._session.post(
                     BULK_URL, headers=headers, json=payload, timeout=15
                 ) as response:
-                    response.raise_for_status()
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise aiohttp.ClientResponseError(
+                            response.request_info,
+                            response.history,
+                            status=response.status,
+                            message=error_text,
+                            headers=response.headers,
+                        )
                     data = await response.json()
                     return data if isinstance(data, list) else []
-            _LOGGER.error("Bulk API request failed: %s", err)
+            _LOGGER.error(
+                "Bulk API request failed for %d endpoints: %s",
+                len(resource_paths),
+                err,
+            )
             raise
 
     async def get_device_info(self) -> dict[str, Any]:

@@ -244,9 +244,56 @@ async def test_wrapper_update_does_not_fallback_to_leaf_reads(mock_client, mock_
 
 
 @pytest.mark.asyncio
+async def test_wrapper_continues_with_later_bulk_groups_after_one_group_is_rejected(
+    mock_client, mock_entry
+):
+    """A rejected bulk group must not prevent later bulk groups from filling the cache."""
+    wrapper = RestGatewayWrapper(client=mock_client, entry=mock_entry)
+    wrapper.BULK_REQUEST_GROUPS = {
+        "core": ["/zones/zn1/temperatureActual"],
+        "supplemental": ["/system/sensors/temperatures/outdoor_t1"],
+    }
+
+    mock_client.post_bulk_resources = AsyncMock(
+        side_effect=[
+            Exception("400 bad request"),
+            [
+                {
+                    "gatewayId": "101270435",
+                    "resourcePaths": [
+                        {
+                            "resourcePath": "/system/sensors/temperatures/outdoor_t1",
+                            "serverStatus": 200,
+                            "gatewayResponse": {
+                                "status": 200,
+                                "payload": {
+                                    "id": "/system/sensors/temperatures/outdoor_t1",
+                                    "value": 17.0,
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+        ]
+    )
+    mock_client.get_resource = AsyncMock(return_value=None)
+
+    await wrapper.update()
+
+    assert mock_client.post_bulk_resources.await_count == 2
+    assert wrapper.get_cached_resource("/system/sensors/temperatures/outdoor_t1") == {
+        "id": "/system/sensors/temperatures/outdoor_t1",
+        "value": 17.0,
+    }
+    mock_client.get_resource.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_wrapper_retries_whole_bulk_request_once(mock_client, mock_entry):
     """Transient bulk errors should trigger a single retry of the whole request."""
     wrapper = RestGatewayWrapper(client=mock_client, entry=mock_entry)
+    wrapper.BULK_REQUEST_GROUPS = {"core": ["/zones/zn1/temperatureActual"]}
 
     mock_client.post_bulk_resources = AsyncMock(
         side_effect=[
@@ -290,7 +337,7 @@ async def test_wrapper_blacklists_forbidden_bulk_paths(mock_client, mock_entry):
 
     forbidden_path = "/zones/zn1/testForbidden"
     wrapper._bulk_blacklist.discard(forbidden_path)
-    wrapper.BULK_PRIMARY_ENDPOINTS = [forbidden_path]
+    wrapper.BULK_REQUEST_GROUPS = {"core": [forbidden_path]}
 
     mock_client.post_bulk_resources = AsyncMock(
         side_effect=[
