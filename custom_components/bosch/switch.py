@@ -76,6 +76,17 @@ class RestSystemSwitch(CoordinatorEntity, BoschEntity, SwitchEntity):
         "notification_light": "/gateway/notificationLight/enabled",
     }
 
+    @classmethod
+    def _state_from_cache(cls, gateway, switch_type: str) -> bool | None:
+        """Return the current switch state from the cached system payload."""
+        path = cls.API_PATHS.get(switch_type)
+        if not path:
+            return None
+        data = gateway.system_cache.get(path)
+        if data and "value" in data:
+            return data["value"] == "true"
+        return None
+
     def __init__(
         self,
         coordinator,
@@ -94,7 +105,7 @@ class RestSystemSwitch(CoordinatorEntity, BoschEntity, SwitchEntity):
         self._name_suffix = name_suffix
         self._attr_icon = icon
         self._is_enabled = is_enabled
-        self._state = None
+        self._state = self._state_from_cache(gateway, switch_type)
 
         # Generate unique ID
         self._attr_unique_id = f"{uuid}_system_{switch_type}"
@@ -162,13 +173,9 @@ class RestSystemSwitch(CoordinatorEntity, BoschEntity, SwitchEntity):
 
     def _handle_coordinator_update(self):
         """Handle updated data from the coordinator."""
-        path = self.API_PATHS.get(self._switch_type)
-        if not path:
-            return
-        cache = self._gateway_wrapper.system_cache
-        data = cache.get(path)
-        if data and "value" in data:
-            self._state = data["value"] == "true"
+        self._state = self._state_from_cache(
+            self._gateway_wrapper, self._switch_type
+        )
         self.async_write_ha_state()
 
 
@@ -199,7 +206,7 @@ class RestZoneSwitch(CoordinatorEntity, BoschEntity, SwitchEntity):
         self._name_suffix = name_suffix
         self._attr_icon = icon
         self._is_enabled = is_enabled
-        self._state = None
+        self._state = zone.window_detection_enabled
 
         # Generate unique ID
         self._attr_unique_id = f"{uuid}{zone.id}_{switch_type}"
@@ -264,3 +271,8 @@ class RestZoneSwitch(CoordinatorEntity, BoschEntity, SwitchEntity):
 
         except Exception as err:
             _LOGGER.error("Error setting zone %s %s: %s", self._zone.zone_id, self._switch_type, err)
+
+    def _handle_coordinator_update(self):
+        """Refresh the switch state from the zone wrapper."""
+        self._state = self._zone.window_detection_enabled
+        self.async_write_ha_state()
