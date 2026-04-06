@@ -204,6 +204,33 @@ def test_sensor_platform_contains_only_modeled_ct200_entities():
     assert ".get_circuits(" not in source
 
 
+def test_zone_app_presentation_selects_are_not_modeled():
+    """Zone icon and heating type app-settings should not be exposed as entities."""
+    select_path = (
+        Path(__file__).parent.parent / "custom_components" / "bosch" / "select.py"
+    )
+    zone_path = (
+        Path(__file__).parent.parent / "custom_components" / "bosch" / "rest_zone.py"
+    )
+    wrapper_path = (
+        Path(__file__).parent.parent
+        / "custom_components"
+        / "bosch"
+        / "rest_gateway_wrapper.py"
+    )
+
+    select_source = select_path.read_text()
+    zone_source = zone_path.read_text()
+    wrapper_source = wrapper_path.read_text()
+
+    assert '("icon", "Icon"' not in select_source
+    assert '("heating_type", "Heating Type"' not in select_source
+    assert '"/zones/zn1/icon"' not in wrapper_source
+    assert '"/zones/zn1/heatingType"' not in wrapper_source
+    assert "self._icon" not in zone_source
+    assert "self._heating_type" not in zone_source
+
+
 def test_discovery_runtime_modules_are_deleted():
     """The OAuth2-only integration should not carry dead API discovery entity code."""
     bosch_dir = Path(__file__).parent.parent / "custom_components" / "bosch"

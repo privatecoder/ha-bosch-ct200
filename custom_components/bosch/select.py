@@ -26,25 +26,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     gateway = data[GATEWAY]
     data[SELECT] = []
 
-    for zone in gateway.zones:
-        for config in (
-            ("icon", "Icon", "mdi:image", ["living", "bedroom", "kitchen", "bathroom", "office", "others"]),
-            ("heating_type", "Heating Type", "mdi:radiator", ["radiator", "convector", "floor"]),
-        ):
-            data[SELECT].append(
-                RestZoneSelect(
-                    coordinator=coordinator,
-                    hass=hass,
-                    uuid=uuid,
-                    zone=zone,
-                    gateway=gateway,
-                    select_type=config[0],
-                    name_suffix=config[1],
-                    icon=config[2],
-                    options=config[3],
-                )
-            )
-
     for heating_circuit in gateway.rest_heating_circuits:
         for config in (
             ("room_influence", "Room Influence", "mdi:home-thermometer", ["none", "low", "medium"]),
@@ -97,103 +78,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(data[SELECT])
     return True
 
-
-class RestZoneSelect(CoordinatorEntity, BoschEntity, SelectEntity):
-    """REST zone select control entity."""
-
-    # API endpoint mapping for each select type
-    API_PATHS = {
-        "icon": "/zones/{zone_id}/icon",
-        "heating_type": "/zones/{zone_id}/heatingType",
-    }
-
-    def __init__(
-        self,
-        coordinator,
-        hass,
-        uuid,
-        zone,
-        gateway,
-        select_type: str,
-        name_suffix: str,
-        icon: str,
-        options: list[str],
-    ):
-        """Initialize REST zone select entity."""
-        CoordinatorEntity.__init__(self, coordinator)
-        self._zone = zone
-        self._select_type = select_type
-        self._name_suffix = name_suffix
-        self._attr_icon = icon
-        self._attr_options = options
-
-        # Generate unique ID
-        self._attr_unique_id = f"{uuid}{zone.id}_{select_type}"
-
-        BoschEntity.__init__(
-            self, hass=hass, uuid=uuid, bosch_object=zone, gateway=gateway
-        )
-
-        # Set name
-        self._name = name_suffix
-        self._name_prefix = ""
-
-    @property
-    def device_name(self):
-        """Return device name."""
-        return f"{self._name_prefix}{self._zone.name}"
-
-    @property
-    def _domain_identifier(self):
-        """Return unique device identifier for this zone."""
-        return {(DOMAIN, self._zone.id, self._uuid)}
-
-    @property
-    def current_option(self) -> str | None:
-        """Return current selected option."""
-        if not self._zone or not self._zone.update_initialized:
-            return None
-
-        # Get value from zone property
-        value = getattr(self._zone, self._select_type, None)
-        _LOGGER.debug("RestZoneSelect.current_option: %s = %s (type: %s)", self._select_type, value, type(value).__name__)
-        return str(value) if value is not None else None
-
-    @property
-    def options(self) -> list[str]:
-        """Return list of available options."""
-        return self._attr_options
-
-    async def async_select_option(self, option: str) -> None:
-        """Set new option via API."""
-        try:
-            # Get API path template and fill in zone_id
-            path_template = self.API_PATHS.get(self._select_type)
-            if not path_template:
-                _LOGGER.error("Unknown select type: %s", self._select_type)
-                return
-
-            path = path_template.format(zone_id=self._zone.zone_id)
-
-            _LOGGER.info("RestZoneSelect: Setting %s to '%s' via %s", self._select_type, option, path)
-
-            # Set value via API
-            result = await self._zone.client.set_resource(path, option)
-
-            _LOGGER.info("RestZoneSelect: API set_resource returned: %s", result)
-
-            if result:
-                # Update local state
-                setattr(self._zone, f"_{self._select_type}", option)
-                await self.coordinator.async_request_refresh()
-                _LOGGER.info("Set %s for %s to '%s'", self._select_type, self._zone.zone_id, option)
-            else:
-                _LOGGER.error("Failed to set %s for %s to '%s' (API returned False/None)",
-                            self._select_type, self._zone.zone_id, option)
-
-        except Exception as err:
-            _LOGGER.error("Error setting %s for %s to '%s': %s",
-                        self._select_type, self._zone.zone_id, option, err, exc_info=True)
 
 class RestHeatingCircuitSelect(CoordinatorEntity, BoschEntity, SelectEntity):
     """REST heating circuit select control entity."""

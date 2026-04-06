@@ -58,8 +58,6 @@ class RestZone:
         self._manual_temp_heating: float | None = None
         self._clock_program: float | None = None
         self._clock_override_temp: float | None = None
-        self._icon: str | None = None
-        self._heating_type: str | None = None
 
         _LOGGER.debug("Created RestZone for %s on device %s", zone_id, device_id)
 
@@ -227,16 +225,6 @@ class RestZone:
         """Return clock override temperature."""
         return self._clock_override_temp
 
-    @property
-    def icon(self) -> str | None:
-        """Return zone icon."""
-        return self._icon
-
-    @property
-    def heating_type(self) -> str | None:
-        """Return zone heating type."""
-        return self._heating_type
-
     async def initialize(self) -> bool:
         """Initialize zone - fetch initial data.
 
@@ -347,14 +335,6 @@ class RestZone:
             )
             if clock_override_data and "value" in clock_override_data:
                 self._clock_override_temp = float(clock_override_data["value"])
-
-            icon_data = await self._get_resource(f"/zones/{self.zone_id}/icon")
-            if icon_data and "value" in icon_data:
-                self._icon = icon_data["value"]
-
-            heating_type_data = await self._get_resource(f"/zones/{self.zone_id}/heatingType")
-            if heating_type_data and "value" in heating_type_data:
-                self._heating_type = heating_type_data["value"]
 
             # Mark as initialized after successful update
             self._update_initialized = True

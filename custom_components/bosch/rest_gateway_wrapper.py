@@ -59,8 +59,6 @@ class RestGatewayWrapper:
         "/zones/zn1/manualTemperatureHeating",
         "/zones/zn1/clockProgram",
         "/zones/zn1/clockOverride/temperatureHeating",
-        "/zones/zn1/icon",
-        "/zones/zn1/heatingType",
     ]
     ZONE_ENDPOINTS = [*ZONE_CORE_ENDPOINTS, *ZONE_SUPPLEMENTAL_ENDPOINTS]
     HEATING_CIRCUIT_CORE_ENDPOINTS = [
