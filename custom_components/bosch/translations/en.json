@@ -1,0 +1,26 @@
+{
+  "config": {
+    "title": "Bosch CT200",
+    "step": {
+      "oauth_browser": {
+        "title": "Bosch SingleKey ID Authorization",
+        "description": "1. Click this link to authorize:\n\n{auth_url}\n\n2. Log in with your Bosch ID credentials\n\n3. After login, the browser may stay on a redirection page. This is expected.\n\n4. Open browser DevTools (F12) and switch to the Network tab.\n\n5. Find the blocked request starting with 'com.bosch.tt.dashtt.pointt://app/login?code=...'\n\n6. Right-click it and copy the full request URL.\n\n7. Paste the complete URL below. The integration will extract the authorization code automatically.",
+        "data": {
+          "code": "Full redirect URL or authorization code"
+        }
+      }
+    },
+    "error": {
+      "service_unavailable": "No service available",
+      "no_code": "Please provide the authorization code from the redirect URL",
+      "invalid_code": "Authorization code is invalid or expired. Please try again.",
+      "network_error": "Cannot connect to authentication server. Check your internet connection.",
+      "auth_failed": "Authentication failed. Please try again.",
+      "no_devices": "No Bosch CT200 devices found for this account"
+    },
+    "abort": {
+      "already_configured": "This Bosch CT200 is already configured",
+      "unknown": "Unknown reason. Check the logs."
+    }
+  }
+}

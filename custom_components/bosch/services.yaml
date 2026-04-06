@@ -1,0 +1,50 @@
+update_thermostat:
+  description: >-
+    Trigger an immediate coordinator refresh for the selected Bosch CT200 devices.
+  target:
+    device:
+      integration: bosch
+send_custom_put_float:
+  description: Send a custom PointT PUT request with a numeric value.
+  target:
+    device:
+      integration: bosch
+  fields:
+    path:
+      description: URI to send put command
+      example: '"/dhwCircuits/dhw1/temperatureLevels/high"'
+    value:
+      description: Value to send
+      example: 50.0
+      selector:
+        number:
+          min: 0
+          max: 70
+send_custom_put_string:
+  description: Send a custom PointT PUT request with a string value.
+  target:
+    device:
+      integration: bosch
+  fields:
+    path:
+      description: URI to send put command
+      example: '"/system/holidayModes/hm1/startStop"'
+      selector:
+        text:
+    value:
+      description: Value to send
+      example: '2022-05-17'
+      selector:
+        text:
+send_custom_get:
+  description: Send a custom PointT GET request.
+  target:
+    device:
+      integration: bosch
+  fields:
+    path:
+      required: true
+      description: URI to send get command
+      example: '"/system/holidayModes/hm1/startStop"'
+      selector:
+        text:
