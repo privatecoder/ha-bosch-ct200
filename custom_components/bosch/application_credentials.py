@@ -1,4 +1,4 @@
-"""Application credentials platform for Bosch thermostat OAuth2."""
+"""Application credentials platform for Bosch CT200 OAuth2."""
 from homeassistant.components.application_credentials import AuthorizationServer
 from homeassistant.core import HomeAssistant
 
@@ -16,7 +16,7 @@ async def async_get_authorization_server(hass: HomeAssistant) -> AuthorizationSe
 async def async_get_description_placeholders(hass: HomeAssistant) -> dict[str, str]:
     """Return description placeholders for the credentials dialog."""
     return {
-        "more_info_url": "https://github.com/bosch-thermostat/home-assistant-bosch-custom-component",
+        "more_info_url": "https://github.com/privatecoder/ha-bosch-ct200",
         "oauth_info": (
             "Note: This integration uses the PointT REST API which requires "
             "OAuth2 authentication through Bosch SingleKey ID. You'll need to "

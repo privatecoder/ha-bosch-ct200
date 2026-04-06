@@ -1,12 +1,12 @@
 {
   "domain": "bosch",
   "name": "Bosch CT200",
-  "documentation": "https://github.com/bosch-thermostat/home-assistant-bosch-custom-component",
-  "issue_tracker": "https://github.com/bosch-thermostat/home-assistant-bosch-custom-component/issues",
+  "documentation": "https://github.com/privatecoder/ha-bosch-ct200",
+  "issue_tracker": "https://github.com/privatecoder/ha-bosch-ct200/issues",
   "dependencies": ["network", "application_credentials"],
-  "codeowners": ["@pszafer"],
+  "codeowners": ["@privatecoder"],
   "requirements": [],
-  "version": "0.29.0",
+  "version": "v0.1.0",
   "config_flow": true,
   "iot_class": "cloud_polling"
 }

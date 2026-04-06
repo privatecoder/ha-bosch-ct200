@@ -1,6 +1,8 @@
-# home-assistant-bosch-custom-component
+# ha-bosch-ct200
 
-Home Assistant custom integration for the Bosch CT200 / EasyControl thermostat.
+Standalone Home Assistant custom integration for the Bosch CT200 / EasyControl thermostat.
+
+Repository: `https://github.com/privatecoder/ha-bosch-ct200`
 
 ## Scope
 
@@ -20,7 +22,7 @@ The integration is modeled-only and uses a coordinator-based, bulk-first refresh
 
 ## Installation
 
-Install as a custom component in Home Assistant, for example via HACS or by copying [`custom_components/bosch`](/Users/maxschaefer/Development/bosch-ct200/home-assistant-bosch-custom-component/custom_components/bosch) into your Home Assistant config directory.
+Install as a custom component in Home Assistant, for example via HACS or by copying `custom_components/bosch` into your Home Assistant config directory.
 
 ## Configuration
 
@@ -33,11 +35,11 @@ Install as a custom component in Home Assistant, for example via HACS or by copy
 
 Useful local tools live in:
 
-- [`debug/refresh_pointt_token.py`](/Users/maxschaefer/Development/bosch-ct200/debug/refresh_pointt_token.py)
-- [`debug/scan_all_endpoints.py`](/Users/maxschaefer/Development/bosch-ct200/debug/scan_all_endpoints.py)
-- [`debug/probe_pointt_bulk.py`](/Users/maxschaefer/Development/bosch-ct200/debug/probe_pointt_bulk.py)
+- [`../debug/refresh_pointt_token.py`](../debug/refresh_pointt_token.py)
+- [`../debug/scan_all_endpoints.py`](../debug/scan_all_endpoints.py)
+- [`../debug/probe_pointt_bulk.py`](../debug/probe_pointt_bulk.py)
 
-See [`debug/README.md`](/Users/maxschaefer/Development/bosch-ct200/debug/README.md) for usage and execution order.
+See [`../debug/README.md`](../debug/README.md) for usage and execution order.
 
 ## Development
 

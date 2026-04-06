@@ -50,7 +50,7 @@ This will use the test OAuth2 flow instead of the manual flow.
 2. Click the **3-dot menu** (top right) → **Application Credentials**
 3. Click **Add Application Credential**
 4. Fill in:
-   - **Integration**: Bosch thermostat
+   - **Integration**: Bosch CT200
    - **Client ID**: `762162C0-FA2D-4540-AE66-6489F189FADC`
    - **Client Secret**: *(Leave empty or use a dummy value - this client doesn't use client secrets)*
 5. Click **Create**

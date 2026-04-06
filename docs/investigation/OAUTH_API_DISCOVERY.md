@@ -29,7 +29,7 @@ The CT200 / EasyControl path in this repository uses Bosch SingleKey OAuth2 plus
 - Parent resources often return `refEnum` containers with `references`
 - Live values are typically returned by leaf endpoints
 - Canonical rediscovery tool:
-  [`debug/scan_all_endpoints.py`](/Users/maxschaefer/Development/bosch-ct200/debug/scan_all_endpoints.py)
+  [`../../debug/scan_all_endpoints.py`](../../debug/scan_all_endpoints.py)
 
 ### Bulk Polling
 
@@ -48,6 +48,6 @@ This path appears in discovery but returned `403 Forbidden` in direct testing an
 
 ## Related Tools
 
-- [`debug/refresh_pointt_token.py`](/Users/maxschaefer/Development/bosch-ct200/debug/refresh_pointt_token.py)
-- [`debug/scan_all_endpoints.py`](/Users/maxschaefer/Development/bosch-ct200/debug/scan_all_endpoints.py)
-- [`debug/probe_pointt_bulk.py`](/Users/maxschaefer/Development/bosch-ct200/debug/probe_pointt_bulk.py)
+- [`../../debug/refresh_pointt_token.py`](../../debug/refresh_pointt_token.py)
+- [`../../debug/scan_all_endpoints.py`](../../debug/scan_all_endpoints.py)
+- [`../../debug/probe_pointt_bulk.py`](../../debug/probe_pointt_bulk.py)
