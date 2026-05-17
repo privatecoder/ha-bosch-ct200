@@ -566,6 +566,22 @@ async def test_select_gateway_step_rejects_unknown_device_id():
 
 
 @pytest.mark.asyncio
+async def test_flow_handler_does_not_shadow_ha_reauth_entry_id_property():
+    """Instantiating the handler must not assign self._reauth_entry_id.
+
+    Modern HA defines ConfigFlow._reauth_entry_id as a read-only property that
+    returns self.context['entry_id']. Assigning to it in __init__ raises
+    AttributeError, which kills the reauth flow before any UI is rendered.
+    """
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        # No context yet — property should return None, not raise.
+        assert handler._reauth_entry_id is None
+        handler.context = {"entry_id": "entry-1"}
+        assert handler._reauth_entry_id == "entry-1"
+
+
+@pytest.mark.asyncio
 async def test_reauth_step_shows_form_initially():
     """async_step_reauth must show the paste form (it does not auto-submit)."""
     with _load_bosch_config_flow_runtime_module() as module:
@@ -597,7 +613,6 @@ async def test_reauth_step_updates_entry_on_successful_token_exchange():
             config_entries=SimpleNamespace(async_get_entry=lambda entry_id: entry)
         )
         handler.context = {"entry_id": "entry-1"}
-        handler._reauth_entry_id = "entry-1"
         handler._code_verifier = "test-verifier"
 
         gateway_client = MagicMock()
@@ -637,7 +652,6 @@ async def test_reauth_step_rejects_when_new_account_does_not_own_device():
             config_entries=SimpleNamespace(async_get_entry=lambda entry_id: entry)
         )
         handler.context = {"entry_id": "entry-1"}
-        handler._reauth_entry_id = "entry-1"
         handler._code_verifier = "test-verifier"
 
         gateway_client = MagicMock()
@@ -670,7 +684,6 @@ async def test_reauth_step_aborts_when_entry_is_gone():
             config_entries=SimpleNamespace(async_get_entry=lambda entry_id: None)
         )
         handler.context = {"entry_id": "entry-gone"}
-        handler._reauth_entry_id = "entry-gone"
         handler._code_verifier = "test-verifier"
 
         result = await handler.async_step_reauth_confirm({"code": "raw-auth-code"})
@@ -887,6 +900,11 @@ def _load_bosch_config_flow_runtime_module():
         @context.setter
         def context(self, value):
             self._context = value
+
+        @property
+        def _reauth_entry_id(self):
+            """Mirror modern HA's read-only property reading context['entry_id']."""
+            return self.context.get("entry_id")
 
         def async_show_form(
             self,

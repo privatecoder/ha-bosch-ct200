@@ -29,7 +29,8 @@ class BoschFlowHandler(config_entries.ConfigFlow):
         self._pending_access_token: str | None = None
         self._pending_refresh_token: str | None = None
         self._pending_gateways: list[dict] = []
-        self._reauth_entry_id: str | None = None
+        # NOTE: do not assign self._reauth_entry_id here — modern HA defines it as
+        # a read-only property on ConfigFlow that returns self.context["entry_id"].
 
     def _extract_code_from_input(self, user_input: str) -> str:
         """Extract the authorization code from a pasted redirect URL or raw code."""
@@ -249,7 +250,8 @@ class BoschFlowHandler(config_entries.ConfigFlow):
     async def async_step_reauth(self, entry_data):
         """Start the reauth flow when the refresh token is rejected."""
         del entry_data
-        self._reauth_entry_id = self.context.get("entry_id")
+        # HA's ConfigFlow exposes self._reauth_entry_id as a read-only property that
+        # reads from self.context["entry_id"]; nothing to set here.
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(self, user_input=None):
