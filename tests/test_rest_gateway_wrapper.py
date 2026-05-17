@@ -490,3 +490,56 @@ async def test_update_system_cache_handles_exception(mock_client, mock_entry):
     assert isinstance(cache, dict)
     assert cache == {}
     mock_client.get_resource.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Auth-failure propagation: ConfigEntryAuthFailed must reach HA so the
+# reauth flow is triggered instead of being swallowed as a transient error.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_initialize_reraises_config_entry_auth_failed(mock_client, mock_entry):
+    """initialize() must let ConfigEntryAuthFailed propagate, not return False."""
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
+    wrapper = RestGatewayWrapper(client=mock_client, entry=mock_entry)
+    mock_client.get_device_info = AsyncMock(
+        side_effect=ConfigEntryAuthFailed("Refresh token expired")
+    )
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await wrapper.initialize()
+
+
+@pytest.mark.asyncio
+async def test_update_reraises_config_entry_auth_failed_from_bulk(mock_client, mock_entry):
+    """A ConfigEntryAuthFailed raised by the bulk path must surface from update()."""
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
+    wrapper = RestGatewayWrapper(client=mock_client, entry=mock_entry)
+    mock_client.post_bulk_resources = AsyncMock(
+        side_effect=ConfigEntryAuthFailed("Refresh token expired")
+    )
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await wrapper.update()
+
+
+@pytest.mark.asyncio
+async def test_bulk_cache_does_not_retry_auth_failure(mock_client, mock_entry):
+    """Auth failures during bulk must abort immediately (no second attempt)."""
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
+    wrapper = RestGatewayWrapper(client=mock_client, entry=mock_entry)
+    wrapper.BULK_REQUEST_GROUPS = {"core": ["/zones/zn1/temperatureActual"]}
+
+    mock_client.post_bulk_resources = AsyncMock(
+        side_effect=ConfigEntryAuthFailed("Refresh token expired")
+    )
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        await wrapper._update_bulk_cache()
+
+    # The retry loop must not re-attempt on an auth failure.
+    assert mock_client.post_bulk_resources.await_count == 1

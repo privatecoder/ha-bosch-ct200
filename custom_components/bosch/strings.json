@@ -9,6 +9,13 @@
           "code": "Full redirect URL or authorization code"
         }
       },
+      "reauth_confirm": {
+        "title": "Re-authenticate Bosch CT200",
+        "description": "The stored refresh token was rejected by Bosch SingleKey ID and a new sign-in is required. The most common cause is that the same Bosch account was used to sign in again elsewhere (for example in the EasyControl mobile app), which invalidates older refresh tokens.\n\n1. Left-click and open the authorization link [here]({auth_url})\n\n2. Log in with your Bosch ID credentials\n\n3. After login, the browser may stay on a redirection page. This is expected.\n\n4. Open browser DevTools (F12) and switch to the Network tab.\n\n5. Find the blocked request starting with 'com.bosch.tt.dashtt.pointt://app/login?code=...'\n\n6. Right-click it and copy the full request URL.\n\n7. Paste the complete URL below. The integration will extract the authorization code automatically.",
+        "data": {
+          "code": "Full redirect URL or authorization code"
+        }
+      },
       "select_gateway": {
         "title": "Select Bosch CT200",
         "description": "More than one unconfigured CT200 was found for this account. Select the device you want to add.",
@@ -24,11 +31,14 @@
       "invalid_device": "Selected device is invalid. Please choose one of the available CT200 devices.",
       "network_error": "Cannot connect to authentication server. Check your internet connection.",
       "auth_failed": "Authentication failed. Please try again.",
-      "no_devices": "No Bosch CT200 devices found for this account"
+      "no_devices": "No Bosch CT200 devices found for this account",
+      "reauth_device_mismatch": "The signed-in Bosch account does not contain the originally configured CT200. Sign in with the same account that owns this device."
     },
     "abort": {
       "already_configured": "This Bosch CT200 is already configured",
-      "unknown": "Unknown reason. Check the logs."
+      "unknown": "Unknown reason. Check the logs.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reauth_unknown_entry": "Could not find the original Bosch CT200 entry to re-authenticate."
     }
   }
 }

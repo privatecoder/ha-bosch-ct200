@@ -565,6 +565,120 @@ async def test_select_gateway_step_rejects_unknown_device_id():
         assert result["errors"] == {"base": "invalid_device"}
 
 
+@pytest.mark.asyncio
+async def test_reauth_step_shows_form_initially():
+    """async_step_reauth must show the paste form (it does not auto-submit)."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        handler.hass = object()
+        handler.context = {"entry_id": "entry-1"}
+
+        result = await handler.async_step_reauth({"device_id": "101426422"})
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "reauth_confirm"
+        assert handler._reauth_entry_id == "entry-1"
+
+
+@pytest.mark.asyncio
+async def test_reauth_step_updates_entry_on_successful_token_exchange():
+    """A successful reauth must persist new tokens and abort with reauth_successful."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        entry = SimpleNamespace(
+            data={
+                "device_id": "101426422",
+                "uuid": "uuid-ct200",
+                "access_token": "old-access",
+                "refresh_token": "old-refresh",
+            }
+        )
+        handler.hass = SimpleNamespace(
+            config_entries=SimpleNamespace(async_get_entry=lambda entry_id: entry)
+        )
+        handler.context = {"entry_id": "entry-1"}
+        handler._reauth_entry_id = "entry-1"
+        handler._code_verifier = "test-verifier"
+
+        gateway_client = MagicMock()
+        gateway_client.get_gateways = AsyncMock(
+            return_value=[{"deviceId": "101426422", "deviceType": "rrc2"}]
+        )
+        module._pointt_rest_client_module.PointTRestClient.side_effect = [gateway_client]
+
+        with patch.object(
+            module._pointt_rest_client_module,
+            "exchange_code_for_tokens",
+            AsyncMock(return_value=("new-access", "new-refresh")),
+        ):
+            result = await handler.async_step_reauth_confirm({"code": "raw-auth-code"})
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "reauth_successful"
+        assert entry.data["access_token"] == "new-access"
+        assert entry.data["refresh_token"] == "new-refresh"
+        assert entry.data["device_id"] == "101426422"
+
+
+@pytest.mark.asyncio
+async def test_reauth_step_rejects_when_new_account_does_not_own_device():
+    """Reauth must fail clearly if the new sign-in doesn't expose the configured CT200."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        entry = SimpleNamespace(
+            data={
+                "device_id": "101426422",
+                "uuid": "uuid-ct200",
+                "access_token": "old-access",
+                "refresh_token": "old-refresh",
+            }
+        )
+        handler.hass = SimpleNamespace(
+            config_entries=SimpleNamespace(async_get_entry=lambda entry_id: entry)
+        )
+        handler.context = {"entry_id": "entry-1"}
+        handler._reauth_entry_id = "entry-1"
+        handler._code_verifier = "test-verifier"
+
+        gateway_client = MagicMock()
+        gateway_client.get_gateways = AsyncMock(
+            return_value=[{"deviceId": "999999999", "deviceType": "rrc2"}]
+        )
+        module._pointt_rest_client_module.PointTRestClient.side_effect = [gateway_client]
+
+        with patch.object(
+            module._pointt_rest_client_module,
+            "exchange_code_for_tokens",
+            AsyncMock(return_value=("new-access", "new-refresh")),
+        ):
+            result = await handler.async_step_reauth_confirm({"code": "raw-auth-code"})
+
+        assert result["type"] == "form"
+        assert result["step_id"] == "reauth_confirm"
+        assert result["errors"] == {"base": "reauth_device_mismatch"}
+        # Entry data must not be overwritten when reauth fails.
+        assert entry.data["access_token"] == "old-access"
+        assert entry.data["refresh_token"] == "old-refresh"
+
+
+@pytest.mark.asyncio
+async def test_reauth_step_aborts_when_entry_is_gone():
+    """If the original entry no longer exists, reauth must abort cleanly."""
+    with _load_bosch_config_flow_runtime_module() as module:
+        handler = module.BoschFlowHandler()
+        handler.hass = SimpleNamespace(
+            config_entries=SimpleNamespace(async_get_entry=lambda entry_id: None)
+        )
+        handler.context = {"entry_id": "entry-gone"}
+        handler._reauth_entry_id = "entry-gone"
+        handler._code_verifier = "test-verifier"
+
+        result = await handler.async_step_reauth_confirm({"code": "raw-auth-code"})
+
+        assert result["type"] == "abort"
+        assert result["reason"] == "reauth_unknown_entry"
+
+
 def test_const_keeps_only_current_config_flow_constants():
     """Verify const.py only keeps constants used by the current integration."""
     const_path = Path(__file__).parent.parent / "custom_components" / "bosch" / "const.py"
@@ -722,6 +836,7 @@ def _load_bosch_init_runtime_module():
         ),
         "homeassistant.exceptions": _module_with_attrs(
             "homeassistant.exceptions",
+            ConfigEntryAuthFailed=type("ConfigEntryAuthFailed", (Exception,), {}),
             ConfigEntryNotReady=type("ConfigEntryNotReady", (Exception,), {}),
         ),
         "homeassistant.helpers": ModuleType("homeassistant.helpers"),
@@ -765,6 +880,14 @@ def _load_bosch_config_flow_runtime_module():
         def __init_subclass__(cls, **kwargs):
             del kwargs
 
+        @property
+        def context(self):
+            return getattr(self, "_context", {})
+
+        @context.setter
+        def context(self, value):
+            self._context = value
+
         def async_show_form(
             self,
             *,
@@ -783,6 +906,13 @@ def _load_bosch_config_flow_runtime_module():
 
         def async_create_entry(self, *, title, data):
             return {"type": "create_entry", "title": title, "data": data}
+
+        def async_abort(self, *, reason):
+            return {"type": "abort", "reason": reason}
+
+        def async_update_reload_and_abort(self, entry, *, data, reason):
+            entry.data = data
+            return {"type": "abort", "reason": reason, "data": data}
 
         async def async_set_unique_id(self, unique_id):
             self.unique_id = unique_id

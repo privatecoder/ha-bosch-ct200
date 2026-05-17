@@ -5,6 +5,7 @@ import logging
 from typing import Any, TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import DEVICE_ID, UUID
 from .rest_dhw_circuit import RestDhwCircuit
@@ -266,6 +267,9 @@ class RestGatewayWrapper:
             )
             return True
 
+        except ConfigEntryAuthFailed:
+            # Let HA trigger the reauth flow rather than retrying forever.
+            raise
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Failed to initialize gateway: %s", err)
             return False
@@ -327,6 +331,9 @@ class RestGatewayWrapper:
                 try:
                     response_data = await self.client.post_bulk_resources(bulk_paths)
                     break
+                except ConfigEntryAuthFailed:
+                    # Auth failures must surface so the coordinator triggers reauth.
+                    raise
                 except Exception as err:  # pylint: disable=broad-except
                     if attempt == 1:
                         failed_paths.update(bulk_paths)
@@ -390,6 +397,8 @@ class RestGatewayWrapper:
 
             _LOGGER.debug("Updated gateway data for %s", self.device_id)
 
+        except ConfigEntryAuthFailed:
+            raise
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Error updating gateway data: %s", err)
             raise

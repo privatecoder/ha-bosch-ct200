@@ -29,6 +29,7 @@ class BoschFlowHandler(config_entries.ConfigFlow):
         self._pending_access_token: str | None = None
         self._pending_refresh_token: str | None = None
         self._pending_gateways: list[dict] = []
+        self._reauth_entry_id: str | None = None
 
     def _extract_code_from_input(self, user_input: str) -> str:
         """Extract the authorization code from a pasted redirect URL or raw code."""
@@ -226,6 +227,96 @@ class BoschFlowHandler(config_entries.ConfigFlow):
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Error during OAuth setup: %s", err)
             return self._show_oauth_browser_form(errors={"base": "auth_failed"})
+
+    def _show_reauth_form(self, errors: dict[str, str] | None = None):
+        """Render the reauth step (browser/paste flow, distinct step_id)."""
+        from .oauth_helper import build_auth_url
+
+        if self._code_verifier is None:
+            from .oauth_helper import generate_pkce_pair
+
+            self._code_verifier, code_challenge = generate_pkce_pair()
+        else:
+            code_challenge = self._build_code_challenge()
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required("code"): str}),
+            errors=errors or {},
+            description_placeholders={"auth_url": build_auth_url(code_challenge)},
+        )
+
+    async def async_step_reauth(self, entry_data):
+        """Start the reauth flow when the refresh token is rejected."""
+        del entry_data
+        self._reauth_entry_id = self.context.get("entry_id")
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Re-run the browser/paste OAuth flow and update the existing entry."""
+        from .pointt_rest_client import PointTRestClient, exchange_code_for_tokens
+
+        if user_input is None:
+            return self._show_reauth_form()
+
+        auth_input = user_input.get("code", "").strip()
+        if not auth_input:
+            return self._show_reauth_form(errors={"code": "no_code"})
+
+        auth_code = self._extract_code_from_input(auth_input)
+        if not auth_code:
+            return self._show_reauth_form(errors={"code": "no_code"})
+
+        entry = (
+            self.hass.config_entries.async_get_entry(self._reauth_entry_id)
+            if self._reauth_entry_id
+            else None
+        )
+        if entry is None:
+            return self.async_abort(reason="reauth_unknown_entry")
+
+        try:
+            session = async_get_clientsession(self.hass)
+            access_token, refresh_token = await exchange_code_for_tokens(
+                session=session,
+                code=auth_code,
+                code_verifier=self._code_verifier,
+            )
+
+            # Verify the new authorization actually covers the configured device.
+            temp_client = PointTRestClient(
+                session=session,
+                device_id="",
+                access_token=access_token,
+                refresh_token=refresh_token,
+            )
+            gateways = await temp_client.get_gateways()
+            existing_device_id = entry.data.get(DEVICE_ID)
+            if not any(
+                gateway.get("deviceId") == existing_device_id
+                for gateway in gateways
+            ):
+                return self._show_reauth_form(
+                    errors={"base": "reauth_device_mismatch"}
+                )
+        except ConfigEntryAuthFailed as err:
+            _LOGGER.error("OAuth reauth token exchange failed: %s", err)
+            return self._show_reauth_form(
+                errors={"base": self._map_oauth_exchange_error(err)}
+            )
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.error("Error during OAuth reauth: %s", err)
+            return self._show_reauth_form(errors={"base": "auth_failed"})
+
+        return self.async_update_reload_and_abort(
+            entry,
+            data={
+                **entry.data,
+                ACCESS_TOKEN: access_token,
+                REFRESH_TOKEN: refresh_token,
+            },
+            reason="reauth_successful",
+        )
 
     async def async_step_select_gateway(self, user_input=None):
         """Select one CT200 gateway when multiple are available."""

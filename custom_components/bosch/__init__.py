@@ -5,7 +5,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
@@ -73,7 +73,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         if not await gateway.initialize():
             raise ConfigEntryNotReady("Failed to initialize Bosch OAuth2 gateway")
-    except ConfigEntryNotReady:
+    except (ConfigEntryAuthFailed, ConfigEntryNotReady):
+        # ConfigEntryAuthFailed must reach HA so the reauth flow is triggered;
+        # ConfigEntryNotReady tells HA to retry setup later.
         raise
     except Exception as err:
         _LOGGER.error("Error initializing Bosch OAuth2 gateway: %s", err)
@@ -83,6 +85,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         """Refresh the REST gateway state."""
         try:
             await gateway.update()
+        except ConfigEntryAuthFailed:
+            # Let the coordinator surface this so HA starts the reauth flow.
+            raise
         except Exception as err:
             raise UpdateFailed(f"Error updating gateway: {err}") from err
 
